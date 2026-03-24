@@ -1,6 +1,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <thread>
+#include <chrono>
 #include <asio.hpp>
 #include "network/client.hpp"
 #include "network/server.hpp"
@@ -9,11 +11,12 @@
 void print_usage() {
     std::cout << "Usage:\n"
               << "  input-bridge --server <port>\n"
-              << "  input-bridge --client <host> <port>\n";
+              << "  input-bridge --client <host> <port>\n"
+              << "  input-bridge --dry-run\n";
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
+    if (argc < 2) {
         print_usage();
         return 1;
     }
@@ -56,10 +59,6 @@ int main(int argc, char* argv[]) {
             network::Client client(io_context, host, port);
             
             client.set_on_connected([&]() {
-                // start_capture is synchronous and blocking or sets up its own callbacks
-                // Actually, evdev read is blocking. Best to run it in a separate thread,
-                // or integrate its file descriptor into ASIO's posix::stream_descriptor.
-                // For now, start_capture will take a pointer to the client to send messages.
                 input::start_capture(reinterpret_cast<void*>(&client));
             });
 
@@ -72,6 +71,21 @@ int main(int argc, char* argv[]) {
             io_context.run();
 #else
             std::cerr << "Error: Client mode is only supported on Linux." << std::endl;
+            return 1;
+#endif
+        } else if (mode == "--dry-run") {
+#ifdef __linux__
+            std::cout << "Starting dry-run mode. Inputs will be captured and printed locally." << std::endl;
+            std::cout << "Press Right Ctrl + Right Alt to exit." << std::endl;
+            
+            input::start_capture(nullptr);
+
+            // Keep main thread alive while background capture thread runs
+            while(true) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+#else
+            std::cerr << "Error: Dry-run mode is only supported on Linux." << std::endl;
             return 1;
 #endif
         } else {

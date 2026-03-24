@@ -80,6 +80,13 @@ The best way to use this is via a systemd service, so you can map a keybind in y
 
 You can bind these commands to a shortcut in your Sway config for a seamless KVM switch experience!
 
+## Testing Mappings Locally
+If you want to test how `libevdev` sees your keys on Linux without forwarding them to a Mac, you can use the `--dry-run` option. This will grab your devices as usual but just print the intercepted keycodes to the terminal:
+```bash
+sudo input-bridge --dry-run
+```
+Press `Right Ctrl + Right Alt` to exit.
+
 ## How it Works
 1. **Discovery:** The Linux client uses `libudev` to scan for all connected input devices (keyboards, mice, trackpads) that expose `EV_KEY` or `EV_REL` events.
 2. **Grab:** It calls `libevdev_grab` on these devices. This creates an exclusive lock at the kernel level.

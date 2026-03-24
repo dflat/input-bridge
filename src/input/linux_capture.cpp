@@ -65,31 +65,43 @@ void translate_and_send(struct input_event& ev, network::Client* client) {
             else if (ev.code == BTN_RIGHT) net_ev.data.mouse_click.button = 2;
             else if (ev.code == BTN_MIDDLE) net_ev.data.mouse_click.button = 3;
             else return; // Ignore other buttons for now
+            
+            if (client == nullptr) {
+                std::cout << "Dry-run: Mouse Button " << (int)net_ev.data.mouse_click.button << (ev.value == 0 ? " Released" : " Pressed") << std::endl;
+            }
         } else {
             net_ev.data.key.keycode = ev.code;
+            if (client == nullptr) {
+                std::cout << "Dry-run: Key Code " << ev.code << " (" << libevdev_event_code_get_name(EV_KEY, ev.code) << ") " << (ev.value == 0 ? "Released" : "Pressed") << std::endl;
+            }
         }
-        client->send_event(net_ev);
+        
+        if (client) client->send_event(net_ev);
     } else if (ev.type == EV_REL) {
         if (ev.code == REL_X) {
             net_ev.type = protocol::EventType::MouseMove;
             net_ev.data.mouse_move.dx = ev.value;
             net_ev.data.mouse_move.dy = 0;
-            client->send_event(net_ev);
+            if (client == nullptr) std::cout << "Dry-run: Mouse Move X " << ev.value << std::endl;
+            else client->send_event(net_ev);
         } else if (ev.code == REL_Y) {
             net_ev.type = protocol::EventType::MouseMove;
             net_ev.data.mouse_move.dx = 0;
             net_ev.data.mouse_move.dy = ev.value;
-            client->send_event(net_ev);
+            if (client == nullptr) std::cout << "Dry-run: Mouse Move Y " << ev.value << std::endl;
+            else client->send_event(net_ev);
         } else if (ev.code == REL_WHEEL) {
             net_ev.type = protocol::EventType::MouseScroll;
             net_ev.data.mouse_scroll.dx = 0;
             net_ev.data.mouse_scroll.dy = ev.value;
-            client->send_event(net_ev);
+            if (client == nullptr) std::cout << "Dry-run: Mouse Scroll Y " << ev.value << std::endl;
+            else client->send_event(net_ev);
         } else if (ev.code == REL_HWHEEL) {
             net_ev.type = protocol::EventType::MouseScroll;
             net_ev.data.mouse_scroll.dx = ev.value;
             net_ev.data.mouse_scroll.dy = 0;
-            client->send_event(net_ev);
+            if (client == nullptr) std::cout << "Dry-run: Mouse Scroll X " << ev.value << std::endl;
+            else client->send_event(net_ev);
         }
     }
 }
