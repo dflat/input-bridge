@@ -31,10 +31,23 @@ static std::thread capture_thread;
 static bool lalt_pressed = false;
 static bool backslash_pressed = false;
 
+// Track absolute position to calculate deltas for touchpads
+static int last_abs_x = -1;
+static int last_abs_y = -1;
+
 void translate_and_send(struct input_event& ev, network::Client* client) {
     protocol::InputEvent net_ev{};
     
     if (ev.type == EV_KEY) {
+        // Reset absolute tracking on any click or touch release
+        if (ev.code == BTN_TOUCH || ev.code == BTN_TOOL_FINGER) {
+            if (ev.value == 0) {
+                last_abs_x = -1;
+                last_abs_y = -1;
+            }
+            return;
+        }
+
         if (ev.code == KEY_LEFTALT) {
             lalt_pressed = (ev.value == 1 || ev.value == 2);
         }
@@ -104,6 +117,39 @@ void translate_and_send(struct input_event& ev, network::Client* client) {
             net_ev.data.mouse_scroll.dy = 0;
             if (client == nullptr) std::cout << "Dry-run: Mouse Scroll X " << ev.value << std::endl;
             else client->send_event(net_ev);
+        }
+    } else if (ev.type == EV_ABS) {
+        // Very basic single-touch absolute to relative translation
+        if (ev.code == ABS_X || ev.code == ABS_MT_POSITION_X) {
+            if (last_abs_x != -1 && last_abs_x != ev.value) {
+                net_ev.type = protocol::EventType::MouseMove;
+                net_ev.data.mouse_move.dx = ev.value - last_abs_x;
+                net_ev.data.mouse_move.dy = 0;
+                
+                // Add a small scale factor to make trackpad usable
+                net_ev.data.mouse_move.dx /= 4; 
+
+                if (net_ev.data.mouse_move.dx != 0) {
+                    if (client == nullptr) std::cout << "Dry-run: Abs Mouse Move X " << net_ev.data.mouse_move.dx << std::endl;
+                    else client->send_event(net_ev);
+                }
+            }
+            last_abs_x = ev.value;
+        } else if (ev.code == ABS_Y || ev.code == ABS_MT_POSITION_Y) {
+            if (last_abs_y != -1 && last_abs_y != ev.value) {
+                net_ev.type = protocol::EventType::MouseMove;
+                net_ev.data.mouse_move.dx = 0;
+                net_ev.data.mouse_move.dy = ev.value - last_abs_y;
+                
+                // Add a small scale factor to make trackpad usable
+                net_ev.data.mouse_move.dy /= 4;
+
+                if (net_ev.data.mouse_move.dy != 0) {
+                    if (client == nullptr) std::cout << "Dry-run: Abs Mouse Move Y " << net_ev.data.mouse_move.dy << std::endl;
+                    else client->send_event(net_ev);
+                }
+            }
+            last_abs_y = ev.value;
         }
     }
 }
@@ -199,8 +245,8 @@ void start_capture(void* client_ptr) {
                             allowed = std::find(cfg.allowed_devices.begin(), cfg.allowed_devices.end(), dev_name) != cfg.allowed_devices.end();
                         }
 
-                        // Check if it has keys or relative axes AND is allowed
-                        if (allowed && (libevdev_has_event_type(evdev, EV_KEY) || libevdev_has_event_type(evdev, EV_REL))) {
+                        // Check if it has keys, relative, or absolute axes AND is allowed
+                        if (allowed && (libevdev_has_event_type(evdev, EV_KEY) || libevdev_has_event_type(evdev, EV_REL) || libevdev_has_event_type(evdev, EV_ABS))) {
                             // Grab the device
                             rc = libevdev_grab(evdev, LIBEVDEV_GRAB);
                             if (rc == 0) {
@@ -212,7 +258,7 @@ void start_capture(void* client_ptr) {
                                 close(fd);
                             }
                         } else {
-                            if (!allowed && (libevdev_has_event_type(evdev, EV_KEY) || libevdev_has_event_type(evdev, EV_REL))) {
+                            if (!allowed && (libevdev_has_event_type(evdev, EV_KEY) || libevdev_has_event_type(evdev, EV_REL) || libevdev_has_event_type(evdev, EV_ABS))) {
                                 std::cout << "Skipping device (not in config): " << dev_name << " (" << devnode << ")" << std::endl;
                             }
                             libevdev_free(evdev);
