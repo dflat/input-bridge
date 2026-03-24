@@ -25,10 +25,29 @@ static std::vector<Device> devices;
 static std::atomic<bool> capture_running{false};
 static std::thread capture_thread;
 
+// Keep track of keys for escape sequence (Right Ctrl + Right Alt)
+static bool rctrl_pressed = false;
+static bool ralt_pressed = false;
+
 void translate_and_send(struct input_event& ev, network::Client* client) {
     protocol::InputEvent net_ev{};
     
     if (ev.type == EV_KEY) {
+        if (ev.code == KEY_RIGHTCTRL) {
+            rctrl_pressed = (ev.value == 1 || ev.value == 2);
+        }
+        if (ev.code == KEY_RIGHTALT) {
+            ralt_pressed = (ev.value == 1 || ev.value == 2);
+        }
+
+        if (rctrl_pressed && ralt_pressed) {
+            std::cout << "\n[Escape sequence detected] Exiting input capture..." << std::endl;
+            // A bit hacky: kill the entire process since asio run loop is main thread
+            // Ideally we cleanly shut down ASIO. For a CLI utility, exit(0) is acceptable 
+            // to cleanly return control if they aren't using systemd.
+            exit(0); 
+        }
+
         if (ev.value == 0) {
             net_ev.type = protocol::EventType::KeyRelease;
         } else if (ev.value == 1 || ev.value == 2) {
