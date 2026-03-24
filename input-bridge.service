@@ -1,0 +1,17 @@
+[Unit]
+Description=Input Bridge (Linux to macOS KVM)
+After=network.target
+
+[Service]
+Type=simple
+# Replace <macos-ip> and <port> with your actual macOS server IP and port
+ExecStart=/usr/local/bin/input-bridge --client 192.168.1.100 8080
+Restart=on-failure
+RestartSec=3
+
+# The service requires access to /dev/input devices. 
+# Running as root is easiest, but ideally you can add a specific user to the 'input' group.
+User=root
+
+[Install]
+WantedBy=multi-user.target
