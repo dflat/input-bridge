@@ -1,9 +1,11 @@
 #include "input.hpp"
+#include "config.hpp"
 #include "../network/client.hpp"
 #include <iostream>
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <algorithm>
 
 #ifdef __linux__
 
@@ -149,6 +151,17 @@ void capture_loop(network::Client* client) {
 void start_capture(void* client_ptr) {
     if (capture_running) return;
 
+    // Load configuration to filter allowed devices
+    auto cfg = config::load_config();
+    bool filter_devices = !cfg.allowed_devices.empty();
+
+    if (filter_devices) {
+        std::cout << "Loading device filter configuration. Will only grab:" << std::endl;
+        for (const auto& dev_name : cfg.allowed_devices) {
+            std::cout << "  - " << dev_name << std::endl;
+        }
+    }
+
     network::Client* client = reinterpret_cast<network::Client*>(client_ptr);
 
     struct udev *udev = udev_new();
@@ -178,12 +191,20 @@ void start_capture(void* client_ptr) {
                     if (rc < 0) {
                         close(fd);
                     } else {
-                        // Check if it has keys or relative axes
-                        if (libevdev_has_event_type(evdev, EV_KEY) || libevdev_has_event_type(evdev, EV_REL)) {
+                        std::string dev_name = libevdev_get_name(evdev) ? libevdev_get_name(evdev) : "";
+
+                        // If filter is active, check if this device's name is in the allowed list
+                        bool allowed = true;
+                        if (filter_devices) {
+                            allowed = std::find(cfg.allowed_devices.begin(), cfg.allowed_devices.end(), dev_name) != cfg.allowed_devices.end();
+                        }
+
+                        // Check if it has keys or relative axes AND is allowed
+                        if (allowed && (libevdev_has_event_type(evdev, EV_KEY) || libevdev_has_event_type(evdev, EV_REL))) {
                             // Grab the device
                             rc = libevdev_grab(evdev, LIBEVDEV_GRAB);
                             if (rc == 0) {
-                                std::cout << "Grabbed device: " << libevdev_get_name(evdev) << " (" << devnode << ")" << std::endl;
+                                std::cout << "Grabbed device: " << dev_name << " (" << devnode << ")" << std::endl;
                                 devices.push_back({fd, evdev});
                             } else {
                                 std::cerr << "Failed to grab device: " << devnode << std::endl;
@@ -191,6 +212,9 @@ void start_capture(void* client_ptr) {
                                 close(fd);
                             }
                         } else {
+                            if (!allowed && (libevdev_has_event_type(evdev, EV_KEY) || libevdev_has_event_type(evdev, EV_REL))) {
+                                std::cout << "Skipping device (not in config): " << dev_name << " (" << devnode << ")" << std::endl;
+                            }
                             libevdev_free(evdev);
                             close(fd);
                         }
