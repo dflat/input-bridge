@@ -58,7 +58,7 @@ On your Linux machine, you can run the client manually (requires root to grab `/
 sudo input-bridge --client <MACOS_IP_ADDRESS> 8080
 ```
 Once connected, your mouse and keyboard on the Linux machine will immediately start controlling the Mac. 
-**To stop manually:** Press `Ctrl+C` (if you can, usually via a secondary keyboard or SSH, which is why systemd is recommended).
+**To stop manually:** Press **`Right Ctrl + Right Alt`** simultaneously on your keyboard. This is a hardcoded escape sequence that will terminate the client and return input to your Linux machine.
 
 ### 3. Systemd Toggle (Recommended)
 The best way to use this is via a systemd service, so you can map a keybind in your window manager (like Sway) to start and stop the service.
