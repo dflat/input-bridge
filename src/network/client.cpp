@@ -50,6 +50,9 @@ void Client::do_connect(const asio::ip::tcp::resolver::results_type& endpoints) 
                 if (on_connected_) {
                     on_connected_();
                 }
+                
+                // Start a read operation to keep ASIO event loop alive and detect disconnections
+                do_read();
             } else {
                 std::cerr << "Connect failed: " << ec.message() << ". Retrying in 1s..." << std::endl;
                 if (on_disconnected_) {
@@ -78,6 +81,26 @@ void Client::do_write() {
                 }
             } else {
                 std::cerr << "Write failed: " << ec.message() << std::endl;
+                socket_.close();
+                if (on_disconnected_) {
+                    on_disconnected_();
+                }
+                // Try to reconnect
+                start();
+            }
+        });
+}
+
+void Client::do_read() {
+    asio::async_read(socket_,
+        asio::buffer(read_buffer_, 1),
+        [this](std::error_code ec, std::size_t /*length*/) {
+            if (!ec) {
+                // Keep reading if server somehow sends data
+                do_read();
+            } else {
+                // Server disconnected or error occurred
+                std::cerr << "Disconnected from server: " << ec.message() << std::endl;
                 socket_.close();
                 if (on_disconnected_) {
                     on_disconnected_();
