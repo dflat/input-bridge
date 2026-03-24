@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
         } else if (mode == "--dry-run") {
 #ifdef __linux__
             std::cout << "Starting dry-run mode. Inputs will be captured and printed locally." << std::endl;
-            std::cout << "Press Right Ctrl + Right Alt to exit." << std::endl;
+            std::cout << "Press Left Alt + Backslash to exit." << std::endl;
             
             input::start_capture(nullptr);
 
