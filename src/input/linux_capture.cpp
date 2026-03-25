@@ -6,6 +6,7 @@
 #include <thread>
 #include <atomic>
 #include <algorithm>
+#include <chrono>
 
 #ifdef __linux__
 
@@ -170,12 +171,28 @@ void capture_loop(network::Client* client) {
 
     struct epoll_event events[16];
     
+    // Inactivity failsafe tracker
+    auto last_input_time = std::chrono::steady_clock::now();
+    const auto INACTIVITY_TIMEOUT = std::chrono::minutes(5); // 5 minutes failsafe
+    
     while (capture_running) {
         int n = epoll_wait(epfd, events, 16, 100); // 100ms timeout to check capture_running
         if (n < 0) {
             if (errno == EINTR) continue;
             std::cerr << "epoll_wait failed" << std::endl;
             break;
+        }
+
+        if (n == 0) {
+            // Timeout hit (100ms passed with no events). Check our global inactivity timer.
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_input_time > INACTIVITY_TIMEOUT) {
+                std::cout << "\n[Failsafe Triggered] No input detected for 5 minutes. Releasing capture to prevent lockout." << std::endl;
+                exit(0);
+            }
+        } else {
+            // We received some input, reset the failsafe timer
+            last_input_time = std::chrono::steady_clock::now();
         }
 
         for (int i = 0; i < n; i++) {
